@@ -24,22 +24,6 @@ void set_positive_sign(BigInt* a){
     a->top_digit &= 0x7FFFFFFF;
 }
 
-// BigInt init(int value){
-//     BigInt result;
-//     result.digits = (unsigned int*)malloc(sizeof(unsigned int));
-//     if(!result.digits) exit('1');
-//     result.digits[0] = 0;
-//     if(value < 0){
-//         result.top_digit = (int)((unsigned int)(-value) & 0x7FFFFFFF);
-//         set_negative_sign(&result);
-//     }
-//     else {
-//         result.top_digit = value & 0x7FFFFFFF;
-//         set_positive_sign(&result);
-//     }
-//     return result;
-// }
-
 int init(BigInt *a, long long val){
     unsigned long long abs = (val < 0) ? (unsigned long long)-(val+1)+1 : (unsigned long long)val;
     unsigned int sign = (val < 0) ? (1 << (sizeof(int) * 8 - 1)) : 0;
@@ -312,7 +296,7 @@ void split(BigInt a, unsigned int k, BigInt *high, BigInt *low){
         unsigned int high_len = digits_count - k;
         high->digits = (unsigned int*)calloc(high_len, sizeof(unsigned int));
         high->digits[0] = high_len - 1;
-        for(unsigned int i = 1; i <= high->digits[0]+1; ++i){
+        for(unsigned int i = 1; i <= high->digits[0]; ++i){
             high->digits[i] = a.digits[k+i];
         }
         high->top_digit = (int)get_top_abs(a);
@@ -409,6 +393,39 @@ void print_bigint(const BigInt a){
     printf("\n");   
 }
 
+void benchmark(int num_digits){
+    BigInt a, b;
+    a.digits = malloc((num_digits + 1) * sizeof(unsigned int));
+    b.digits = malloc((num_digits + 1) * sizeof(unsigned int));
+    a.digits[0] = num_digits, b.digits[0] = num_digits;
+    for(int i = 1; i <= num_digits; ++i){
+        a.digits[i] = rand();
+        b.digits[i] = rand(); 
+    }
+    a.top_digit = rand() & 0x7FFFFFFF;
+    b.top_digit = rand() & 0x7FFFFFFF;
+
+    clock_t start, end;
+
+    // Default multiplication
+    start = clock();
+    BigInt result_default = mul_main(a, b);
+    end = clock();
+    double time_default = ((double)(end - start)) / CLOCKS_PER_SEC;
+    
+    // Karatsuba
+    start = clock();
+    BigInt result_karatsuba = big_k_main(a, b);
+    end = clock();
+    double time_karatsuba = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+    printf("Benchmarking:\nStandart: %.4fs\nKaratsuba: %.4fs\n", time_default, time_karatsuba);
+    deinit(&a);
+    deinit(&b);
+    deinit(&result_default);
+    deinit(&result_karatsuba);
+}
+
 void demo_first(){
     printf("Task 1 demo\n");
     BigInt a, b;
@@ -494,6 +511,9 @@ void demo_second(){
     printf("(Karatsuba)[A after A *= B] ");
     print_bigint(copy_c);
 
+    // Benchmarking
+    benchmark(5000);
+
     deinit(&a);
     deinit(&b);
     deinit(&c);
@@ -501,7 +521,7 @@ void demo_second(){
 }
 
 int main(void) {
-    // demo_first();
+    demo_first();
     demo_second();
 
     return 0;
