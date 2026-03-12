@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct {
     int top_digit;
@@ -273,21 +274,143 @@ void mul_inplace(BigInt *a, BigInt b){
     *a = tmp;
 }
 
+BigInt shift(BigInt a, unsigned int k){
+    if(k == 0) return copy(&a);
+    if(get_top_abs(a) == 0 && a.digits[0] == 0){
+        init(&a, 0);
+        return a;
+    }
+    BigInt result;
+    unsigned int old_len = a.digits[0];
+    result.digits = (unsigned int*)calloc(old_len + k + 1, sizeof(unsigned int));
+    if(!result.digits) exit(1);
+    result.digits[0] = old_len + k;
+    for(unsigned int i = 1; i <= old_len; ++i){
+        result.digits[i+k] = a.digits[i];
+    }
+    result.digits[result.digits[0]] = (unsigned int)get_top_abs(a);
+    result.top_digit = 0;
+    if(get_sign(a) == 1) set_negative_sign(&result);
+
+    normalize(&result);
+    return result;
+}
+
+void split(BigInt a, unsigned int k, BigInt *high, BigInt *low){
+    low->digits = (unsigned int*)calloc(k+1, sizeof(unsigned int));
+    low->digits[0] = k;
+    for(unsigned int i = 1; i <= k; ++i){
+        if(i <= a.digits[0]) low->digits[i] = a.digits[i];
+    }
+    low->top_digit = 0;
+    set_positive_sign(low);
+    normalize(low);
+
+    unsigned int digits_count = a.digits[0] + 1;
+    if(digits_count <= k) init(high, 0);
+    else{
+        unsigned int high_len = digits_count - k;
+        high->digits = (unsigned int*)calloc(high_len, sizeof(unsigned int));
+        high->digits[0] = high_len - 1;
+        for(unsigned int i = 1; i <= high->digits[0]+1; ++i){
+            high->digits[i] = a.digits[k+i];
+        }
+        high->top_digit = (int)get_top_abs(a);
+        set_positive_sign(high);
+        normalize(high);
+    }
+}
+
+BigInt big_k(BigInt a, BigInt b){
+    unsigned int n = (a.digits[0] > b.digits[0] ? a.digits[0] : b.digits[0]) + 1;
+    if(n < 32) return mul_main(a, b);
+    
+    unsigned int m = n/2;
+    BigInt high_a, low_a, high_b, low_b;
+    split(a, m, &high_a, &low_a);
+    split(b, m, &high_b, &low_b);
+
+    BigInt z0,z1,z2,s1,s2,p,t;
+    
+    z0 = big_k(low_a, low_b);
+    z2 = big_k(high_a, high_b);
+    s1 = add_main(low_a, high_a);
+    s2 = add_main(low_b, high_b);
+    
+    // (low_a + high_a) * (low_b + high_b) - high_a*high_b - low_a*low_b
+    p = big_k(s1, s2);
+    t = sub_main(p, z2);
+    z1 = sub_main(t, z0);
+
+    // high_a*high_b*B^(2m) + z1*B^m + low_a*low_b
+    BigInt z2_shift = shift(z2, 2*m);
+    BigInt z1_shift = shift(z1, m);
+
+    BigInt between_res = add_main(z2_shift, z1_shift);
+    BigInt result = add_main(between_res, z0);
+
+    deinit(&z0);
+    deinit(&z1);
+    deinit(&z2);
+    deinit(&s1);
+    deinit(&s2);
+    deinit(&p);
+    deinit(&t);
+    deinit(&high_a);
+    deinit(&high_b);
+    deinit(&low_a);
+    deinit(&low_b);
+    deinit(&z2_shift);
+    deinit(&z1_shift);
+    deinit(&between_res);
+
+    return result;
+}
+
+BigInt big_k_main(BigInt a, BigInt b){
+    BigInt abs_a, abs_b;
+    abs_a = copy(&a);
+    abs_b = copy(&b);
+    set_positive_sign(&abs_a);
+    set_positive_sign(&abs_b);
+
+    BigInt result = big_k(abs_a, abs_b);
+
+    if(get_sign(a) != get_sign(b)) set_negative_sign(&result);
+    else set_positive_sign(&result);
+
+    deinit(&abs_a);
+    deinit(&abs_b);
+
+    normalize(&result);
+    return result;
+}
+
+void big_k_inplace(BigInt *a, BigInt b){
+    BigInt tmp = big_k_main(*a, b);
+    deinit(a);
+    *a = tmp;
+}
+
 void print_bigint(const BigInt a){
     unsigned int sign = get_sign(a);
     unsigned int abs_top = get_top_abs(a);
     unsigned int len = a.digits[0];
-    printf("[%c] Top: 0x%X, Digits(%u): ", 
+    printf("[%c] Top: 0x%X, Digits(%u)", 
         (sign == 1) ? '-' : '+', 
         abs_top, 
         len);
-    for(int i = a.digits[0]; i >= 1; --i){
-        printf("%08X ", a.digits[i]);
+    if(len > 0){
+        printf(": ");
+        for(int i = a.digits[0]; i >= 1; --i){
+            printf("%08X ", a.digits[i]);
+        }
     }
     printf("\n");   
 }
 
 void demo_first(){
+    printf("Task 1 demo\n");
     BigInt a, b;
     init(&a, 10);
     init(&b, 3);
@@ -335,6 +458,8 @@ void demo_first(){
     printf("[A after A *= B] ");
     print_bigint(copy_e);
 
+    printf("------------------------\n");
+    
     deinit(&a);
     deinit(&b);
     deinit(&c);
@@ -345,9 +470,39 @@ void demo_first(){
     deinit(&copy_e);
 }
 
+void demo_second(){
+    printf("Task 2 demo\n");
+    BigInt a, b;
+    init(&a, 5);
+    init(&b, 2);
+
+    printf("Initial values:\n");
+    printf("A ");
+    print_bigint(a);
+    printf("B ");
+    print_bigint(b);
+    printf("--------\n");
+
+    // Big K algorithm
+    BigInt c = big_k_main(a, b);
+    printf("(Karatsuba)[C = A * B] ");
+    print_bigint(c);
+
+    // Inplace Big K algorithm
+    BigInt copy_c = copy(&a);
+    big_k_inplace(&copy_c, b);
+    printf("(Karatsuba)[A after A *= B] ");
+    print_bigint(copy_c);
+
+    deinit(&a);
+    deinit(&b);
+    deinit(&c);
+    deinit(&copy_c);
+}
+
 int main(void) {
-    printf("Task 1 demo\n");
-    demo_first();
+    // demo_first();
+    demo_second();
 
     return 0;
 }
