@@ -376,6 +376,92 @@ void big_k_inplace(BigInt *a, BigInt b){
     *a = tmp;
 }
 
+BigInt calculate_a(unsigned int n){
+    BigInt result;
+    init(&result, 0);
+    if(n == 0){
+        return result;
+    }
+
+    BigInt n_fact;
+    init(&n_fact, 1);
+    for(unsigned int i = 2; i <= n; ++i){
+        BigInt temp;
+        init(&temp, i);
+        mul_inplace(&n_fact, temp);
+        deinit(&temp);
+    }
+    for(unsigned int i = 1; i <= n; ++i){
+        BigInt term = copy(&n_fact);
+        if((n-i) % 2 != 0) set_negative_sign(&term);
+        add_inplace(&result, term);
+        deinit(&term);
+    }
+
+    deinit(&n_fact);
+    return result;
+}
+
+// (mod 2^n)
+void secondary_b(BigInt *a, unsigned int n){
+    if(n == 0) {
+        deinit(a);
+        init(a, 0);
+        return;
+    }
+
+    unsigned int full_bits = n / 32;
+    unsigned int remaining_bits = n % 32;
+
+    if(full_bits < a->digits[0]){
+        if(remaining_bits > 0){
+            a->digits[full_bits + 1] &= ((1 << remaining_bits) - 1);
+            a->digits[0] = full_bits + 1;
+        }
+        else{
+            a->digits[0] = full_bits;
+        }
+        a->top_digit &= 1 << 31;
+    }
+    else if(full_bits == a->digits[0]){
+        unsigned int mask = (1 << remaining_bits) - 1;
+        unsigned int sign = get_sign(*a);
+        a->top_digit = (int)((get_top_abs(*a) & mask) | (sign << 31));
+    }
+    else{
+        unsigned int bits_at_top = n - (a->digits[0] * 32);
+        if(bits_at_top < 31){
+            unsigned int mask = (1 << bits_at_top) - 1;
+            unsigned int sign = get_sign(*a);
+            a->top_digit = (int)((get_top_abs(*a) & mask) | (sign << 31));
+        }
+    }
+    
+    normalize(a);
+}
+
+BigInt calculate_b(long long base_val, long long exp, unsigned int n){
+    BigInt result, base;
+    init(&base, base_val);
+    init(&result, 1);
+
+    secondary_b(&base, n);
+
+    // FIXME fast_pow algorithm
+    while(exp > 0){
+        if(exp % 2 != 0){
+            mul_inplace(&result, base);
+            secondary_b(&result, n);
+        }
+        mul_inplace(&base, base);
+        secondary_b(&base, n);
+        exp /= 2;
+    }
+
+    deinit(&base);
+    return result;
+}
+
 void print_bigint(const BigInt a){
     unsigned int sign = get_sign(a);
     unsigned int abs_top = get_top_abs(a);
@@ -397,6 +483,7 @@ void benchmark(int num_digits){
     BigInt a, b;
     a.digits = malloc((num_digits + 1) * sizeof(unsigned int));
     b.digits = malloc((num_digits + 1) * sizeof(unsigned int));
+    if(!a.digits || !b.digits) exit(1);
     a.digits[0] = num_digits, b.digits[0] = num_digits;
     for(int i = 1; i <= num_digits; ++i){
         a.digits[i] = rand();
@@ -419,7 +506,9 @@ void benchmark(int num_digits){
     end = clock();
     double time_karatsuba = ((double)(end - start)) / CLOCKS_PER_SEC;
 
-    printf("Benchmarking:\nStandart: %.4fs\nKaratsuba: %.4fs\n", time_default, time_karatsuba);
+    printf("Benchmarking:\nMultiplication of two random %d digits numbers\nStandart: %.4fs\nKaratsuba: %.4fs\n", 
+        num_digits, time_default, time_karatsuba);
+    
     deinit(&a);
     deinit(&b);
     deinit(&result_default);
@@ -429,10 +518,10 @@ void benchmark(int num_digits){
 void demo_first(){
     printf("Task 1 demo\n");
     BigInt a, b;
-    init(&a, 10);
-    init(&b, 3);
-    // init(&a, 1000000000);
-    // init(&b, -2000000000);
+    // init(&a, 10);
+    // init(&b, 3);
+    init(&a, 1000000000);
+    init(&b, -2000000000);
 
 
     printf("Initial values:\n");
@@ -511,8 +600,12 @@ void demo_second(){
     printf("(Karatsuba)[A after A *= B] ");
     print_bigint(copy_c);
 
+    printf("--------\n");
+
     // Benchmarking
-    benchmark(5000);
+    benchmark(6000);
+
+    printf("------------------------\n");
 
     deinit(&a);
     deinit(&b);
@@ -520,9 +613,56 @@ void demo_second(){
     deinit(&copy_c);
 }
 
+// void demo_third(){
+//     // a
+//     unsigned int test_n = 55;
+//     printf("a) Вычисление при n = %u:\n", test_n);
+//     BigInt result = calculate_a(test_n);
+//     printf("af(%u) = ", test_n);
+//     print_bigint(result);
+
+//     // b
+//     test_n = 150;
+//     long long base = 115249;
+//     long long exp = 4183;
+//     printf("b) Вычисление при n = %u:\n", test_n);
+//     result = calculate_b(base, exp, test_n);
+//     printf("%lld^%lld (mod 2^%u) = ", base, exp, test_n);
+//     print_bigint(result);
+
+//     deinit(&result);
+// }
+
+void demo_third(){
+    // a
+    unsigned int test_n;
+
+    printf("Введите натуральный n для выражения a: ");
+    scanf("%u", &test_n);
+
+    printf("a) Вычисление при n = %u:\n", test_n);
+    BigInt result = calculate_a(test_n);
+    printf("af(%u) = ", test_n);
+    print_bigint(result);
+
+    // b
+    printf("Введите натуральный n для выражения b: ");
+    scanf("%u", &test_n);
+
+    long long base = 115249;
+    long long exp = 4183;
+    printf("b) Вычисление при n = %u:\n", test_n);
+    result = calculate_b(base, exp, test_n);
+    printf("%lld^%lld (mod 2^%u) = ", base, exp, test_n);
+    print_bigint(result);
+
+    deinit(&result);
+}
+
 int main(void) {
-    demo_first();
-    demo_second();
+    // demo_first();
+    // demo_second();
+    demo_third();
 
     return 0;
 }
