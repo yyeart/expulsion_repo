@@ -486,8 +486,8 @@ void benchmark(int num_digits){
     if(!a.digits || !b.digits) exit(1);
     a.digits[0] = num_digits, b.digits[0] = num_digits;
     for(int i = 1; i <= num_digits; ++i){
-        a.digits[i] = rand();
-        b.digits[i] = rand(); 
+        a.digits[i] = (unsigned int)rand() | ((unsigned int)rand() << 16);
+        b.digits[i] = (unsigned int)rand() | ((unsigned int)rand() << 16);
     }
     a.top_digit = rand() & 0x7FFFFFFF;
     b.top_digit = rand() & 0x7FFFFFFF;
@@ -579,8 +579,10 @@ void demo_first(){
 void demo_second(){
     printf("Task 2 demo\n");
     BigInt a, b;
-    init(&a, 5);
-    init(&b, 2);
+    // init(&a, 5);
+    // init(&b, 2);
+    init(&a, 1000000000);
+    init(&b, -2000000000);
 
     printf("Initial values:\n");
     printf("A ");
@@ -613,42 +615,18 @@ void demo_second(){
     deinit(&copy_c);
 }
 
-// void demo_third(){
-//     // a
-//     unsigned int test_n = 55;
-//     printf("a) Вычисление при n = %u:\n", test_n);
-//     BigInt result = calculate_a(test_n);
-//     printf("af(%u) = ", test_n);
-//     print_bigint(result);
-
-//     // b
-//     test_n = 150;
-//     long long base = 115249;
-//     long long exp = 4183;
-//     printf("b) Вычисление при n = %u:\n", test_n);
-//     result = calculate_b(base, exp, test_n);
-//     printf("%lld^%lld (mod 2^%u) = ", base, exp, test_n);
-//     print_bigint(result);
-
-//     deinit(&result);
-// }
-
 void demo_third(){
+    printf("Task 3 demo\n");
+    
     // a
-    unsigned int test_n;
-
-    printf("Введите натуральный n для выражения a: ");
-    scanf("%u", &test_n);
-
+    unsigned int test_n = 55;
     printf("a) Вычисление при n = %u:\n", test_n);
     BigInt result = calculate_a(test_n);
     printf("af(%u) = ", test_n);
     print_bigint(result);
 
     // b
-    printf("Введите натуральный n для выражения b: ");
-    scanf("%u", &test_n);
-
+    test_n = 150;
     long long base = 115249;
     long long exp = 4183;
     printf("b) Вычисление при n = %u:\n", test_n);
@@ -659,10 +637,77 @@ void demo_third(){
     deinit(&result);
 }
 
+// void demo_third(){
+//     // a
+//     unsigned int test_n;
+
+//     printf("Введите натуральный n для выражения a: ");
+//     scanf("%u", &test_n);
+
+//     printf("a) Вычисление при n = %u:\n", test_n);
+//     BigInt result = calculate_a(test_n);
+//     printf("af(%u) = ", test_n);
+//     print_bigint(result);
+
+//     // b
+//     printf("Введите натуральный n для выражения b: ");
+//     scanf("%u", &test_n);
+
+//     long long base = 115249;
+//     long long exp = 4183;
+//     printf("b) Вычисление при n = %u:\n", test_n);
+//     result = calculate_b(base, exp, test_n);
+//     printf("%lld^%lld (mod 2^%u) = ", base, exp, test_n);
+//     print_bigint(result);
+
+//     deinit(&result);
+// }
+
+double get_runtime(int num_digits, BigInt (*algorithm)(BigInt, BigInt)){
+    BigInt a, b;
+    a.digits = (unsigned int*)malloc((num_digits+1) * sizeof(unsigned int));
+    if(!a.digits) exit(1);
+    b.digits = (unsigned int*)malloc((num_digits+1) * sizeof(unsigned int));
+    if(!a.digits) exit(1);
+    a.digits[0] = num_digits;
+    b.digits[0] = num_digits;
+
+    for(int i = 1; i <= num_digits; ++i){
+        a.digits[i] = (unsigned int)rand() | ((unsigned int)rand() << 16);
+        b.digits[i] = (unsigned int)rand() | ((unsigned int)rand() << 16);
+    }
+    a.top_digit = rand() & 0x7FFFFFFF;
+    b.top_digit = rand() & 0x7FFFFFFF;
+    clock_t start = clock();
+    BigInt result = algorithm(a, b);
+    clock_t end = clock();
+    
+    double time = (double)(end - start) / CLOCKS_PER_SEC;
+    deinit(&a);
+    deinit(&b);
+    deinit(&result);
+    
+    return time;
+}
+
+void run_compare(){
+    int digits[] = {500, 1000, 5000, 10000};
+    int digits_sizes = sizeof(digits) / sizeof(digits[0]);
+    printf("------------------------\n");
+    printf("Size | Default | Karatsuba\n");
+    for(int i = 0; i < digits_sizes; ++i){
+        int n = digits[i];
+        double runtime_default = get_runtime(n, mul_main);
+        double runtime_karatsuba = get_runtime(n, big_k_main);
+        printf("%d | %f | %f\n", n, runtime_default, runtime_karatsuba);
+    }
+}
+
 int main(void) {
-    // demo_first();
-    // demo_second();
+    demo_first();
+    demo_second();
     demo_third();
+    run_compare();
 
     return 0;
 }
